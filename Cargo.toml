@@ -1,0 +1,24 @@
+[package]
+name = "totp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+base32 = "0.4"
+rand = "0.8"
+
+# Optional dependencies for additional features
+qrcode = { version = "0.13", optional = true }
+image = { version = "0.24", optional = true }
+chrono = { version = "0.4", optional = true }
+
+[features]
+default = []
+qr-generation = ["qrcode", "image"]
+time-utils = ["chrono"]
+
+[dev-dependencies]
+hex = "0.4"
