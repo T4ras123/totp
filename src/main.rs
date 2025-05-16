@@ -4,6 +4,23 @@ use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 use base32::{Alphabet, decode, encode};
+use clap::{Parser, ValueEnum};
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long)]
+    secret: Option<String>,
+
+    #[arg(short, long, default_value_t = 6)]
+    digits: usize,
+
+    #[arg(short, long, default_value_t = 10)]
+    time_step: u64,
+
+    #[arg(short, long, value_enum, default_value_t = HashAlgArg::SHA256)]
+    algorithm: HashAlgArg
+}
 
 #[derive(Debug, Clone)]
 pub enum HashAlgorithm {
@@ -123,25 +140,6 @@ impl TOTP {
         self.verify(code, now, window)
     }
 
-    pub fn to_uri(&self, label: &str, issuer: &str) -> String {
-        let secret_base32 = encode(Alphabet::RFC4648 { padding: false }, &self.secret);
-        let algorithm = match self.algorithm {
-            HashAlgorithm::SHA1 => "SHA1",
-            HashAlgorithm::SHA256 => "SHA256",
-            HashAlgorithm::SHA512 => "SHA512",
-        };
-        
-        format!(
-            "otpauth://totp/{}?secret={}&issuer={}&algorithm={}&digits={}&period={}",
-            label,
-            secret_base32,
-            issuer,
-            algorithm,
-            self.digits,
-            self.time_step
-        )
-    }
-
 }
 
 pub fn generate_secret(length: usize) -> Vec<u8> {
@@ -154,12 +152,40 @@ pub fn secret_to_base32(secret: &[u8]) -> String {
     encode(Alphabet::RFC4648 { padding: false }, secret)
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug, ValueEnum)]
+enum HashAlgArg {
+    SHA1,
+    SHA256,
+    SHA512,
+}
+
 fn main() {
-    let secret = generate_secret(20);
-    let secret_base32 = secret_to_base32(&secret);
-    println!("Secret (base32): {}", secret_base32);
+
+    let args = Args::parse();
+
+    let (secret, _) = match args.secret {
+        Some(secret) => {
+            let decoded = decode(Alphabet::RFC4648 { padding: false }, &secret)
+                .expect("Invalid base32 secret provided");
+            println!("Decoded secret (base32): {}", secret);
+            (decoded, secret)
+        },
+        None => {
+            let secret = generate_secret(20);
+            let secret_base32 = secret_to_base32(&secret);
+            println!("Generated new secret (base32): {}", secret_base32);
+            (secret, secret_base32)
+        }
+    };
+
+
+    let algorithm = match args.algorithm {
+        HashAlgArg::SHA1 => HashAlgorithm::SHA1,
+        HashAlgArg::SHA256 => HashAlgorithm::SHA256,
+        HashAlgArg::SHA512 => HashAlgorithm::SHA512,
+    };
     
-    let totp = TOTP::new(secret, 6, 10, HashAlgorithm::SHA256);
+    let totp = TOTP::new(secret, args.digits, args.time_step, algorithm);
     
     let code = totp.generate_current().unwrap();
     println!("Current OTP: {}", code);
