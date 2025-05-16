@@ -159,16 +159,15 @@ fn main() {
     let secret_base32 = secret_to_base32(&secret);
     println!("Secret (base32): {}", secret_base32);
     
-    let totp = TOTP::new(secret, 6, 5, HashAlgorithm::SHA256);
+    let totp = TOTP::new(secret, 6, 10, HashAlgorithm::SHA256);
     
     let code = totp.generate_current().unwrap();
     println!("Current OTP: {}", code);
     
     let is_valid = totp.verify_current(&code, 1);
-    println!("Code valid: {}", is_valid);
+    println!("Code valid: {}\n\n", is_valid);
     
     let mut last_code = String::new();
-    let mut last_time_remaining = 0;
 
     loop {
         let now = SystemTime::now()
@@ -176,19 +175,21 @@ fn main() {
             .unwrap()
             .as_secs();
         
-        let time_remaining = 30 - (now % 30);
+        let time_remaining = totp.time_step - (now % totp.time_step);
         
         let current_code = totp.generate_current().unwrap();
         
         if current_code != last_code {
-            println!("New code: {} (valid for {} seconds)", current_code, time_remaining);
+            print!("\x1b[2K\r\x1b[1A\x1b[2K\r\x1b[1A\x1b[2K\r");
+            println!("\nNew code: {} (valid for {} seconds)", current_code, time_remaining);
             last_code = current_code;
         }
-        
-        if time_remaining % 5 == 0 && time_remaining != last_time_remaining {
-            println!("  Time remaining: {} seconds", time_remaining);
-            last_time_remaining = time_remaining;
-        }
+
+        let bar_length = 30; 
+        let filled_length = (bar_length as f64 * (time_remaining as f64 / totp.time_step as f64)) as usize;
+        let bar = "|".repeat(bar_length - filled_length) + &"-".repeat(filled_length);
+        print!("\r  [{}] {} seconds", bar, time_remaining);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
         
         thread::sleep(Duration::from_secs(1));
     }
